@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Sentiment Trend Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #1e293b;
+            --border: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --green: #22c55e;
+            --red: #ef4444;
+            --yellow: #fbbf24;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 1.5rem 2rem;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+        .header p {
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+            font-size: 0.9rem;
+        }
+
+        .search-section {
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+        }
+        .search-box {
+            display: flex;
+            gap: 0.75rem;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 0.875rem 1.25rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            outline: none;
+            transition: border-color 0.2s;
+            text-transform: uppercase;
+        }
+        .search-box input::placeholder {
+            text-transform: none;
+        }
+        .search-box input:focus { border-color: var(--accent); }
+        .search-box button {
+            padding: 0.875rem 2rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 0.75rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+        .search-box button:hover { background: var(--accent-hover); }
+        .search-box button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .popular-tickers {
+            margin-top: 1rem;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .popular-tickers span {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+        .ticker-chip {
+            padding: 0.3rem 0.75rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 2rem;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .ticker-chip:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 4rem 2rem;
+            display: none;
+        }
+        .loading.active { display: block; }
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error-msg {
+            max-width: 600px;
+            margin: 1rem auto;
+            padding: 1rem 1.5rem;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 0.75rem;
+            color: #fca5a5;
+            text-align: center;
+            display: none;
+        }
+        .error-msg.active { display: block; }
+
+        .results {
+            max-width: 1200px;
+            margin: 0 auto 3rem;
+            padding: 0 1.5rem;
+            display: none;
+        }
+        .results.active { display: block; }
+
+        /* Recommendation Banner */
+        .rec-banner {
+            padding: 2rem;
+            border-radius: 1rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+        .rec-label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+        .rec-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+        .rec-desc {
+            color: var(--text-secondary);
+            max-width: 700px;
+            margin: 0 auto;
+            line-height: 1.5;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+        }
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-top: 0.25rem;
+        }
+        .stat-sub {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+        .positive { color: var(--green); }
+        .negative { color: var(--red); }
+        .neutral-color { color: var(--yellow); }
+
+        /* Charts */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        @media (max-width: 768px) {
+            .charts-grid { grid-template-columns: 1fr; }
+        }
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+        }
+        .chart-card h3 {
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+        .chart-card canvas {
+            width: 100% !important;
+        }
+
+        /* Sentiment Breakdown */
+        .sentiment-bar-container {
+            margin-bottom: 1.5rem;
+        }
+        .sentiment-bar {
+            display: flex;
+            height: 12px;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        .sentiment-bar .pos { background: var(--green); }
+        .sentiment-bar .neu { background: var(--yellow); }
+        .sentiment-bar .neg { background: var(--red); }
+        .sentiment-legend {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .sentiment-legend span::before {
+            content: '';
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 0.4rem;
+            vertical-align: middle;
+        }
+        .legend-pos::before { background: var(--green) !important; }
+        .legend-neu::before { background: var(--yellow) !important; }
+        .legend-neg::before { background: var(--red) !important; }
+
+        /* News Table */
+        .news-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            overflow: hidden;
+        }
+        .news-section h3 {
+            padding: 1.25rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 1rem;
+        }
+        .news-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .news-item {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.2s;
+        }
+        .news-item:hover { background: rgba(255,255,255,0.02); }
+        .news-item:last-child { border-bottom: none; }
+        .news-title {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        .news-title a {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+        .news-title a:hover { color: var(--accent); }
+        .news-meta {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        .sentiment-badge {
+            padding: 0.15rem 0.6rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-positive { background: rgba(34,197,94,0.15); color: var(--green); }
+        .badge-negative { background: rgba(239,68,68,0.15); color: var(--red); }
+        .badge-neutral { background: rgba(251,191,36,0.15); color: var(--yellow); }
+
+        .disclaimer {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            padding: 2rem;
+            border-top: 1px solid var(--border);
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Stock Sentiment Trend Monitor</h1>
+        <p>Analyze news sentiment and predict trends vs benchmark index</p>
+    </div>
+
+    <div class="search-section">
+        <div class="search-box">
+            <input type="text" id="tickerInput" placeholder="Enter stock ticker (e.g., AAPL, RELIANCE.NS)"
+                   autocomplete="off" spellcheck="false">
+            <button id="analyzeBtn" onclick="analyze()">Analyze</button>
+        </div>
+        <div class="popular-tickers">
+            <span>Popular:</span>
+            <div class="ticker-chip" onclick="quickSearch('AAPL')">AAPL</div>
+            <div class="ticker-chip" onclick="quickSearch('MSFT')">MSFT</div>
+            <div class="ticker-chip" onclick="quickSearch('GOOGL')">GOOGL</div>
+            <div class="ticker-chip" onclick="quickSearch('TSLA')">TSLA</div>
+            <div class="ticker-chip" onclick="quickSearch('NVDA')">NVDA</div>
+            <div class="ticker-chip" onclick="quickSearch('RELIANCE.NS')">RELIANCE.NS</div>
+            <div class="ticker-chip" onclick="quickSearch('TCS.NS')">TCS.NS</div>
+        </div>
+    </div>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Fetching news & analyzing sentiment...</p>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">This may take 15-30 seconds</p>
+    </div>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <div class="results" id="results">
+        <!-- Recommendation Banner -->
+        <div class="rec-banner" id="recBanner">
+            <div class="rec-label">Next Week Trend Recommendation</div>
+            <div class="rec-value" id="recValue">--</div>
+            <div class="rec-desc" id="recDesc">--</div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-label">Stock Return (15d)</div>
+                <div class="stat-value" id="stockReturn">--</div>
+                <div class="stat-sub" id="stockName">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Benchmark Return (15d)</div>
+                <div class="stat-value" id="benchReturn">--</div>
+                <div class="stat-sub" id="benchName">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Excess Return (Alpha)</div>
+                <div class="stat-value" id="excessReturn">--</div>
+                <div class="stat-sub">vs Benchmark</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Avg Sentiment Score</div>
+                <div class="stat-value" id="avgSentiment">--</div>
+                <div class="stat-sub" id="articleCount">--</div>
+            </div>
+        </div>
+
+        <!-- Sentiment Breakdown Bar -->
+        <div class="chart-card sentiment-bar-container">
+            <h3>Sentiment Distribution</h3>
+            <div class="sentiment-bar" id="sentimentBar"></div>
+            <div class="sentiment-legend">
+                <span class="legend-pos" id="legendPos">Positive: --</span>
+                <span class="legend-neu" id="legendNeu">Neutral: --</span>
+                <span class="legend-neg" id="legendNeg">Negative: --</span>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>Price Performance (Normalized to 100)</h3>
+                <canvas id="priceChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Daily Sentiment Score</h3>
+                <canvas id="sentimentChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Signal Summary -->
+        <div class="stats-grid" style="margin-bottom: 1.5rem;">
+            <div class="stat-card">
+                <div class="stat-label">Sentiment Signal</div>
+                <div class="stat-value" id="sentSignal" style="font-size: 1.25rem;">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Momentum Signal</div>
+                <div class="stat-value" id="momSignal" style="font-size: 1.25rem;">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Combined Score</div>
+                <div class="stat-value" id="combinedScore">--</div>
+                <div class="stat-sub">Range: -4 to +4</div>
+            </div>
+        </div>
+
+        <!-- News List -->
+        <div class="news-section">
+            <h3 id="newsHeader">Recent News Articles</h3>
+            <div class="news-list" id="newsList"></div>
+        </div>
+
+        <div class="disclaimer">
+            This tool is for informational purposes only and does not constitute financial advice.
+            Sentiment analysis is based on automated NLP processing of news headlines and may not reflect actual market conditions.
+            Always do your own research before making investment decisions.
+        </div>
+    </div>
+
+    <script>
+        let priceChart = null;
+        let sentimentChart = null;
+
+        document.getElementById('tickerInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') analyze();
+        });
+
+        function quickSearch(ticker) {
+            document.getElementById('tickerInput').value = ticker;
+            analyze();
+        }
+
+        async function analyze() {
+            const ticker = document.getElementById('tickerInput').value.trim().toUpperCase();
+            if (!ticker) return;
+
+            const btn = document.getElementById('analyzeBtn');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const errorMsg = document.getElementById('errorMsg');
+
+            btn.disabled = true;
+            btn.textContent = 'Analyzing...';
+            loading.classList.add('active');
+            results.classList.remove('active');
+            errorMsg.classList.remove('active');
+
+            try {
+                const resp = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticker })
+                });
+
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    throw new Error(data.error || 'Analysis failed');
+                }
+
+                renderResults(data);
+                results.classList.add('active');
+            } catch (err) {
+                errorMsg.textContent = err.message;
+                errorMsg.classList.add('active');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Analyze';
+                loading.classList.remove('active');
+            }
+        }
+
+        function renderResults(data) {
+            const { ticker, company_name, benchmark, sentiment, prices, recommendation } = data;
+
+            // Recommendation Banner
+            const banner = document.getElementById('recBanner');
+            banner.style.background = recommendation.color + '15';
+            banner.style.borderColor = recommendation.color + '40';
+            document.getElementById('recValue').textContent = recommendation.recommendation;
+            document.getElementById('recValue').style.color = recommendation.color;
+            document.getElementById('recDesc').textContent = recommendation.description;
+
+            // Stats
+            if (!prices.error) {
+                const stockRet = document.getElementById('stockReturn');
+                stockRet.textContent = (prices.stock_return_pct >= 0 ? '+' : '') + prices.stock_return_pct + '%';
+                stockRet.className = 'stat-value ' + (prices.stock_return_pct >= 0 ? 'positive' : 'negative');
+
+                const benchRet = document.getElementById('benchReturn');
+                benchRet.textContent = (prices.bench_return_pct >= 0 ? '+' : '') + prices.bench_return_pct + '%';
+                benchRet.className = 'stat-value ' + (prices.bench_return_pct >= 0 ? 'positive' : 'negative');
+
+                const excessRet = document.getElementById('excessReturn');
+                excessRet.textContent = (prices.excess_return_pct >= 0 ? '+' : '') + prices.excess_return_pct + '%';
+                excessRet.className = 'stat-value ' + (prices.excess_return_pct >= 0 ? 'positive' : 'negative');
+            } else {
+                document.getElementById('stockReturn').textContent = 'N/A';
+                document.getElementById('benchReturn').textContent = 'N/A';
+                document.getElementById('excessReturn').textContent = 'N/A';
+            }
+
+            document.getElementById('stockName').textContent = `${company_name} (${ticker})`;
+            document.getElementById('benchName').textContent = benchmark.index_name;
+
+            const avgSent = document.getElementById('avgSentiment');
+            avgSent.textContent = sentiment.summary.avg_sentiment;
+            avgSent.className = 'stat-value ' + (
+                sentiment.summary.avg_sentiment > 0.05 ? 'positive' :
+                sentiment.summary.avg_sentiment < -0.05 ? 'negative' : 'neutral-color'
+            );
+            document.getElementById('articleCount').textContent = `Based on ${sentiment.summary.total_articles} articles`;
+
+            // Sentiment Bar
+            const bar = document.getElementById('sentimentBar');
+            bar.innerHTML = `
+                <div class="pos" style="width: ${sentiment.summary.positive_pct}%"></div>
+                <div class="neu" style="width: ${sentiment.summary.neutral_pct}%"></div>
+                <div class="neg" style="width: ${sentiment.summary.negative_pct}%"></div>
+            `;
+            document.getElementById('legendPos').textContent = `Positive: ${sentiment.summary.positive_pct}%`;
+            document.getElementById('legendNeu').textContent = `Neutral: ${sentiment.summary.neutral_pct}%`;
+            document.getElementById('legendNeg').textContent = `Negative: ${sentiment.summary.negative_pct}%`;
+
+            // Signals
+            const sentSignal = document.getElementById('sentSignal');
+            sentSignal.textContent = recommendation.sentiment_signal;
+            sentSignal.className = 'stat-value ' + (
+                recommendation.sentiment_signal.includes('Positive') ? 'positive' :
+                recommendation.sentiment_signal.includes('Negative') ? 'negative' : 'neutral-color'
+            );
+            const momSignal = document.getElementById('momSignal');
+            momSignal.textContent = recommendation.momentum_signal;
+            momSignal.className = 'stat-value ' + (
+                recommendation.momentum_signal.includes('Outperformance') ? 'positive' :
+                recommendation.momentum_signal.includes('Underperformance') ? 'negative' : 'neutral-color'
+            );
+            const combined = document.getElementById('combinedScore');
+            combined.textContent = (recommendation.combined_score >= 0 ? '+' : '') + recommendation.combined_score;
+            combined.className = 'stat-value ' + (
+                recommendation.combined_score > 0 ? 'positive' :
+                recommendation.combined_score < 0 ? 'negative' : 'neutral-color'
+            );
+
+            // Price Chart
+            renderPriceChart(prices, ticker, benchmark.index_name);
+
+            // Sentiment Chart
+            renderSentimentChart(sentiment.daily_sentiment);
+
+            // News List
+            renderNews(sentiment.articles, ticker);
+        }
+
+        function renderPriceChart(prices, ticker, benchName) {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            if (priceChart) priceChart.destroy();
+
+            if (prices.error) {
+                priceChart = null;
+                return;
+            }
+
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: prices.dates,
+                    datasets: [
+                        {
+                            label: ticker,
+                            data: prices.stock_normalized,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59,130,246,0.1)',
+                            tension: 0.3,
+                            fill: false,
+                            pointRadius: 3,
+                            borderWidth: 2
+                        },
+                        {
+                            label: benchName,
+                            data: prices.bench_normalized,
+                            borderColor: '#94a3b8',
+                            backgroundColor: 'rgba(148,163,184,0.1)',
+                            tension: 0.3,
+                            fill: false,
+                            pointRadius: 3,
+                            borderWidth: 2,
+                            borderDash: [5, 5]
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: { labels: { color: '#94a3b8' } },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#64748b', maxRotation: 45 },
+                            grid: { color: 'rgba(51,65,85,0.5)' }
+                        },
+                        y: {
+                            ticks: { color: '#64748b' },
+                            grid: { color: 'rgba(51,65,85,0.5)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderSentimentChart(dailySentiment) {
+            const ctx = document.getElementById('sentimentChart').getContext('2d');
+            if (sentimentChart) sentimentChart.destroy();
+
+            const dates = Object.keys(dailySentiment);
+            const scores = Object.values(dailySentiment);
+            const colors = scores.map(s => s >= 0.05 ? '#22c55e' : s <= -0.05 ? '#ef4444' : '#fbbf24');
+
+            sentimentChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Avg Sentiment',
+                        data: scores,
+                        backgroundColor: colors.map(c => c + '80'),
+                        borderColor: colors,
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#64748b', maxRotation: 45 },
+                            grid: { color: 'rgba(51,65,85,0.5)' }
+                        },
+                        y: {
+                            min: -1,
+                            max: 1,
+                            ticks: { color: '#64748b' },
+                            grid: { color: 'rgba(51,65,85,0.5)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderNews(articles, ticker) {
+            document.getElementById('newsHeader').textContent = `Recent News for ${ticker} (${articles.length} articles)`;
+            const list = document.getElementById('newsList');
+            list.innerHTML = articles.map(a => {
+                const badgeClass = a.sentiment_label === 'Positive' ? 'badge-positive' :
+                                   a.sentiment_label === 'Negative' ? 'badge-negative' : 'badge-neutral';
+                return `
+                    <div class="news-item">
+                        <div class="news-title">
+                            <a href="${a.link}" target="_blank" rel="noopener">${a.title}</a>
+                        </div>
+                        <div class="news-meta">
+                            <span>${a.published}</span>
+                            <span>${a.source}</span>
+                            <span class="sentiment-badge ${badgeClass}">${a.sentiment_label} (${a.sentiment_score})</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    </script>
+</body>
+</html>
