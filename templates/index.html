@@ -2,9 +2,23 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Sentiment Trend Monitor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>StockSentiment</title>
+
+    <!-- PWA Meta -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- iOS PWA Meta -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="StockSentiment">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+
+    <!-- Preload Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
     <style>
         :root {
             --bg-primary: #0f172a;
@@ -18,196 +32,259 @@
             --green: #22c55e;
             --red: #ef4444;
             --yellow: #fbbf24;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        html {
+            height: 100%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
             background: var(--bg-primary);
             color: var(--text-primary);
             min-height: 100vh;
+            min-height: -webkit-fill-available;
+            padding-top: var(--safe-top);
+            padding-bottom: var(--safe-bottom);
+            overscroll-behavior-y: contain;
         }
 
+        /* Header */
         .header {
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border);
-            padding: 1.5rem 2rem;
+            padding: 1.25rem 1rem;
             text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            background: rgba(30, 41, 59, 0.85);
         }
         .header h1 {
-            font-size: 1.75rem;
+            font-size: 1.35rem;
             font-weight: 700;
             letter-spacing: -0.025em;
         }
         .header p {
             color: var(--text-secondary);
-            margin-top: 0.25rem;
-            font-size: 0.9rem;
+            margin-top: 0.15rem;
+            font-size: 0.8rem;
         }
 
+        /* Search */
         .search-section {
             max-width: 600px;
-            margin: 2rem auto;
-            padding: 0 1.5rem;
+            margin: 1.25rem auto;
+            padding: 0 1rem;
         }
         .search-box {
             display: flex;
-            gap: 0.75rem;
+            gap: 0.5rem;
         }
         .search-box input {
             flex: 1;
-            padding: 0.875rem 1.25rem;
+            padding: 0.85rem 1rem;
             background: var(--bg-secondary);
             border: 1px solid var(--border);
             border-radius: 0.75rem;
             color: var(--text-primary);
-            font-size: 1.1rem;
+            font-size: 16px; /* Prevents iOS zoom */
             outline: none;
             transition: border-color 0.2s;
             text-transform: uppercase;
         }
-        .search-box input::placeholder {
-            text-transform: none;
-        }
+        .search-box input::placeholder { text-transform: none; color: var(--text-secondary); }
         .search-box input:focus { border-color: var(--accent); }
         .search-box button {
-            padding: 0.875rem 2rem;
+            padding: 0.85rem 1.5rem;
             background: var(--accent);
             color: white;
             border: none;
             border-radius: 0.75rem;
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.2s, transform 0.1s;
             white-space: nowrap;
         }
         .search-box button:hover { background: var(--accent-hover); }
-        .search-box button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        .search-box button:active { transform: scale(0.97); }
+        .search-box button:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .popular-tickers {
-            margin-top: 1rem;
+            margin-top: 0.75rem;
             display: flex;
-            gap: 0.5rem;
+            gap: 0.4rem;
             flex-wrap: wrap;
             justify-content: center;
+            align-items: center;
         }
         .popular-tickers span {
             color: var(--text-secondary);
-            font-size: 0.85rem;
+            font-size: 0.8rem;
         }
         .ticker-chip {
-            padding: 0.3rem 0.75rem;
+            padding: 0.3rem 0.7rem;
             background: var(--bg-secondary);
             border: 1px solid var(--border);
             border-radius: 2rem;
             color: var(--text-secondary);
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             cursor: pointer;
             transition: all 0.2s;
+            user-select: none;
         }
-        .ticker-chip:hover {
+        .ticker-chip:active {
             border-color: var(--accent);
             color: var(--accent);
+            transform: scale(0.95);
         }
 
+        /* Install Banner */
+        .install-banner {
+            max-width: 600px;
+            margin: 0 auto 0.75rem;
+            padding: 0.75rem 1rem;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            border-radius: 0.75rem;
+            display: none;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .install-banner.active { display: flex; }
+        .install-banner strong { color: var(--text-primary); }
+        .install-banner button {
+            margin-left: auto;
+            padding: 0.4rem 0.8rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .install-close {
+            background: none !important;
+            color: var(--text-secondary) !important;
+            font-size: 1.2rem !important;
+            padding: 0.2rem 0.4rem !important;
+        }
+
+        /* Loading */
         .loading {
             text-align: center;
-            padding: 4rem 2rem;
+            padding: 3rem 1.5rem;
             display: none;
         }
         .loading.active { display: block; }
         .spinner {
-            width: 48px;
-            height: 48px;
-            border: 4px solid var(--border);
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
             border-top-color: var(--accent);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
-            margin: 0 auto 1rem;
+            margin: 0 auto 0.75rem;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .loading p { font-size: 0.9rem; }
 
+        /* Error */
         .error-msg {
             max-width: 600px;
-            margin: 1rem auto;
-            padding: 1rem 1.5rem;
+            margin: 0.75rem auto;
+            padding: 0.85rem 1rem;
             background: rgba(239, 68, 68, 0.1);
             border: 1px solid rgba(239, 68, 68, 0.3);
             border-radius: 0.75rem;
             color: #fca5a5;
             text-align: center;
             display: none;
+            font-size: 0.9rem;
         }
         .error-msg.active { display: block; }
 
+        /* Results */
         .results {
             max-width: 1200px;
-            margin: 0 auto 3rem;
-            padding: 0 1.5rem;
+            margin: 0 auto;
+            padding: 0 1rem 2rem;
             display: none;
         }
         .results.active { display: block; }
 
         /* Recommendation Banner */
         .rec-banner {
-            padding: 2rem;
+            padding: 1.5rem 1rem;
             border-radius: 1rem;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
             text-align: center;
             border: 1px solid var(--border);
         }
         .rec-label {
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.1em;
             color: var(--text-secondary);
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.35rem;
         }
         .rec-value {
-            font-size: 2.5rem;
+            font-size: 2rem;
             font-weight: 800;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.35rem;
         }
         .rec-desc {
             color: var(--text-secondary);
             max-width: 700px;
             margin: 0 auto;
-            line-height: 1.5;
+            line-height: 1.45;
+            font-size: 0.85rem;
         }
 
         /* Stats Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1rem;
         }
         .stat-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 0.75rem;
-            padding: 1.25rem;
+            padding: 1rem;
         }
         .stat-label {
-            font-size: 0.8rem;
+            font-size: 0.7rem;
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
         .stat-value {
-            font-size: 1.75rem;
+            font-size: 1.4rem;
             font-weight: 700;
-            margin-top: 0.25rem;
+            margin-top: 0.15rem;
         }
         .stat-sub {
-            font-size: 0.8rem;
+            font-size: 0.7rem;
             color: var(--text-secondary);
-            margin-top: 0.25rem;
+            margin-top: 0.15rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .positive { color: var(--green); }
         .negative { color: var(--red); }
@@ -216,36 +293,29 @@
         /* Charts */
         .charts-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        @media (max-width: 768px) {
-            .charts-grid { grid-template-columns: 1fr; }
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
         }
         .chart-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 0.75rem;
-            padding: 1.25rem;
+            padding: 1rem;
         }
         .chart-card h3 {
-            font-size: 1rem;
-            margin-bottom: 1rem;
+            font-size: 0.85rem;
+            margin-bottom: 0.75rem;
             color: var(--text-secondary);
         }
-        .chart-card canvas {
-            width: 100% !important;
-        }
+        .chart-card canvas { width: 100% !important; }
 
-        /* Sentiment Breakdown */
-        .sentiment-bar-container {
-            margin-bottom: 1.5rem;
-        }
+        /* Sentiment Bar */
+        .sentiment-bar-container { margin-bottom: 1rem; }
         .sentiment-bar {
             display: flex;
-            height: 12px;
-            border-radius: 6px;
+            height: 10px;
+            border-radius: 5px;
             overflow: hidden;
             margin-top: 0.5rem;
         }
@@ -254,25 +324,35 @@
         .sentiment-bar .neg { background: var(--red); }
         .sentiment-legend {
             display: flex;
-            gap: 1.5rem;
+            gap: 1rem;
             margin-top: 0.5rem;
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             color: var(--text-secondary);
+            flex-wrap: wrap;
         }
         .sentiment-legend span::before {
             content: '';
             display: inline-block;
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
-            margin-right: 0.4rem;
+            margin-right: 0.35rem;
             vertical-align: middle;
         }
         .legend-pos::before { background: var(--green) !important; }
         .legend-neu::before { background: var(--yellow) !important; }
         .legend-neg::before { background: var(--red) !important; }
 
-        /* News Table */
+        /* Signal Grid */
+        .signal-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .signal-grid .stat-value { font-size: 1rem; }
+
+        /* News */
         .news-section {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -280,41 +360,44 @@
             overflow: hidden;
         }
         .news-section h3 {
-            padding: 1.25rem;
+            padding: 1rem;
             border-bottom: 1px solid var(--border);
-            font-size: 1rem;
+            font-size: 0.9rem;
         }
         .news-list {
-            max-height: 500px;
+            max-height: 60vh;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }
         .news-item {
-            padding: 1rem 1.25rem;
+            padding: 0.85rem 1rem;
             border-bottom: 1px solid var(--border);
-            transition: background 0.2s;
+            transition: background 0.15s;
         }
-        .news-item:hover { background: rgba(255,255,255,0.02); }
+        .news-item:active { background: rgba(255,255,255,0.03); }
         .news-item:last-child { border-bottom: none; }
         .news-title {
             font-weight: 600;
-            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
+            margin-bottom: 0.3rem;
+            line-height: 1.35;
         }
         .news-title a {
             color: var(--text-primary);
             text-decoration: none;
         }
-        .news-title a:hover { color: var(--accent); }
         .news-meta {
-            font-size: 0.8rem;
+            font-size: 0.7rem;
             color: var(--text-secondary);
             display: flex;
-            gap: 1rem;
+            gap: 0.5rem;
             align-items: center;
+            flex-wrap: wrap;
         }
         .sentiment-badge {
-            padding: 0.15rem 0.6rem;
+            padding: 0.15rem 0.5rem;
             border-radius: 1rem;
-            font-size: 0.75rem;
+            font-size: 0.65rem;
             font-weight: 600;
         }
         .badge-positive { background: rgba(34,197,94,0.15); color: var(--green); }
@@ -324,27 +407,59 @@
         .disclaimer {
             text-align: center;
             color: var(--text-secondary);
-            font-size: 0.75rem;
-            padding: 2rem;
+            font-size: 0.65rem;
+            padding: 1.5rem 1rem;
             border-top: 1px solid var(--border);
-            margin-top: 2rem;
+            margin-top: 1.5rem;
+            line-height: 1.5;
+        }
+
+        /* Pull-to-refresh indicator */
+        .pull-indicator {
+            text-align: center;
+            padding: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            display: none;
+        }
+
+        /* Desktop: wider layout */
+        @media (min-width: 769px) {
+            .header { padding: 1.5rem 2rem; }
+            .header h1 { font-size: 1.75rem; }
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+            .charts-grid { grid-template-columns: 1fr 1fr; }
+            .rec-value { font-size: 2.5rem; }
+            .stat-value { font-size: 1.75rem; }
+            .results { padding: 0 1.5rem 3rem; }
+            .ticker-chip:hover { border-color: var(--accent); color: var(--accent); }
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>Stock Sentiment Trend Monitor</h1>
-        <p>Analyze news sentiment and predict trends vs benchmark index</p>
+        <h1>StockSentiment</h1>
+        <p>News sentiment & trend analysis vs benchmark</p>
     </div>
 
     <div class="search-section">
+        <!-- Install Banner -->
+        <div class="install-banner" id="installBanner">
+            <div>
+                <strong>Install this app</strong><br>
+                Add to home screen for the full experience
+            </div>
+            <button id="installBtn" onclick="installApp()">Install</button>
+            <button class="install-close" onclick="dismissInstall()">x</button>
+        </div>
+
         <div class="search-box">
-            <input type="text" id="tickerInput" placeholder="Enter stock ticker (e.g., AAPL, RELIANCE.NS)"
-                   autocomplete="off" spellcheck="false">
+            <input type="text" id="tickerInput" placeholder="Ticker (e.g. AAPL, RELIANCE.NS)"
+                   autocomplete="off" spellcheck="false" autocapitalize="characters">
             <button id="analyzeBtn" onclick="analyze()">Analyze</button>
         </div>
         <div class="popular-tickers">
-            <span>Popular:</span>
+            <span>Try:</span>
             <div class="ticker-chip" onclick="quickSearch('AAPL')">AAPL</div>
             <div class="ticker-chip" onclick="quickSearch('MSFT')">MSFT</div>
             <div class="ticker-chip" onclick="quickSearch('GOOGL')">GOOGL</div>
@@ -357,8 +472,8 @@
 
     <div class="loading" id="loading">
         <div class="spinner"></div>
-        <p>Fetching news & analyzing sentiment...</p>
-        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">This may take 15-30 seconds</p>
+        <p>Analyzing sentiment...</p>
+        <p style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.3rem;">Fetching news & market data</p>
     </div>
 
     <div class="error-msg" id="errorMsg"></div>
@@ -366,7 +481,7 @@
     <div class="results" id="results">
         <!-- Recommendation Banner -->
         <div class="rec-banner" id="recBanner">
-            <div class="rec-label">Next Week Trend Recommendation</div>
+            <div class="rec-label">Next Week Trend</div>
             <div class="rec-value" id="recValue">--</div>
             <div class="rec-desc" id="recDesc">--</div>
         </div>
@@ -374,22 +489,22 @@
         <!-- Stats Grid -->
         <div class="stats-grid" id="statsGrid">
             <div class="stat-card">
-                <div class="stat-label">Stock Return (15d)</div>
+                <div class="stat-label">Stock (15d)</div>
                 <div class="stat-value" id="stockReturn">--</div>
                 <div class="stat-sub" id="stockName">--</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Benchmark Return (15d)</div>
+                <div class="stat-label">Benchmark (15d)</div>
                 <div class="stat-value" id="benchReturn">--</div>
                 <div class="stat-sub" id="benchName">--</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Excess Return (Alpha)</div>
+                <div class="stat-label">Excess Alpha</div>
                 <div class="stat-value" id="excessReturn">--</div>
                 <div class="stat-sub">vs Benchmark</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Avg Sentiment Score</div>
+                <div class="stat-label">Avg Sentiment</div>
                 <div class="stat-value" id="avgSentiment">--</div>
                 <div class="stat-sub" id="articleCount">--</div>
             </div>
@@ -409,7 +524,7 @@
         <!-- Charts -->
         <div class="charts-grid">
             <div class="chart-card">
-                <h3>Price Performance (Normalized to 100)</h3>
+                <h3>Price vs Benchmark (Normalized)</h3>
                 <canvas id="priceChart"></canvas>
             </div>
             <div class="chart-card">
@@ -419,62 +534,116 @@
         </div>
 
         <!-- Signal Summary -->
-        <div class="stats-grid" style="margin-bottom: 1.5rem;">
+        <div class="signal-grid">
             <div class="stat-card">
-                <div class="stat-label">Sentiment Signal</div>
-                <div class="stat-value" id="sentSignal" style="font-size: 1.25rem;">--</div>
+                <div class="stat-label">Sentiment</div>
+                <div class="stat-value" id="sentSignal">--</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Momentum Signal</div>
-                <div class="stat-value" id="momSignal" style="font-size: 1.25rem;">--</div>
+                <div class="stat-label">Momentum</div>
+                <div class="stat-value" id="momSignal">--</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Combined Score</div>
+                <div class="stat-label">Score</div>
                 <div class="stat-value" id="combinedScore">--</div>
-                <div class="stat-sub">Range: -4 to +4</div>
+                <div class="stat-sub">-4 to +4</div>
             </div>
         </div>
 
         <!-- News List -->
         <div class="news-section">
-            <h3 id="newsHeader">Recent News Articles</h3>
+            <h3 id="newsHeader">Recent News</h3>
             <div class="news-list" id="newsList"></div>
         </div>
 
         <div class="disclaimer">
-            This tool is for informational purposes only and does not constitute financial advice.
-            Sentiment analysis is based on automated NLP processing of news headlines and may not reflect actual market conditions.
+            For informational purposes only. Not financial advice.
+            Sentiment is based on automated NLP analysis of news headlines.
             Always do your own research before making investment decisions.
         </div>
     </div>
 
     <script>
+        // --- Service Worker Registration ---
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/sw.js')
+                .then(reg => console.log('SW registered'))
+                .catch(err => console.log('SW failed:', err));
+        }
+
+        // --- PWA Install Prompt ---
+        let deferredPrompt = null;
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            if (!localStorage.getItem('installDismissed')) {
+                document.getElementById('installBanner').classList.add('active');
+            }
+        });
+
+        // iOS Safari install hint
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isInStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        if (isIOS && !isInStandalone && !localStorage.getItem('installDismissed')) {
+            const banner = document.getElementById('installBanner');
+            banner.querySelector('div').innerHTML = '<strong>Install this app</strong><br>Tap <span style="font-size:1.1em">&#x2B06;&#xFE0F;</span> then "Add to Home Screen"';
+            banner.querySelector('#installBtn').style.display = 'none';
+            banner.classList.add('active');
+        }
+
+        function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(choice => {
+                    deferredPrompt = null;
+                    document.getElementById('installBanner').classList.remove('active');
+                });
+            }
+        }
+
+        function dismissInstall() {
+            document.getElementById('installBanner').classList.remove('active');
+            localStorage.setItem('installDismissed', '1');
+        }
+
+        // --- App Logic ---
         let priceChart = null;
         let sentimentChart = null;
+        let lastTicker = null;
 
-        document.getElementById('tickerInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') analyze();
+        const tickerInput = document.getElementById('tickerInput');
+        tickerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                tickerInput.blur(); // Hide keyboard on mobile
+                analyze();
+            }
         });
 
         function quickSearch(ticker) {
-            document.getElementById('tickerInput').value = ticker;
+            tickerInput.value = ticker;
+            tickerInput.blur();
             analyze();
         }
 
         async function analyze() {
-            const ticker = document.getElementById('tickerInput').value.trim().toUpperCase();
+            const ticker = tickerInput.value.trim().toUpperCase();
             if (!ticker) return;
 
+            lastTicker = ticker;
             const btn = document.getElementById('analyzeBtn');
             const loading = document.getElementById('loading');
             const results = document.getElementById('results');
             const errorMsg = document.getElementById('errorMsg');
 
             btn.disabled = true;
-            btn.textContent = 'Analyzing...';
+            btn.textContent = '...';
             loading.classList.add('active');
             results.classList.remove('active');
             errorMsg.classList.remove('active');
+
+            // Scroll to top on mobile
+            window.scrollTo({ top: 0, behavior: 'smooth' });
 
             try {
                 const resp = await fetch('/api/analyze', {
@@ -491,6 +660,11 @@
 
                 renderResults(data);
                 results.classList.add('active');
+
+                // Scroll to results
+                setTimeout(() => {
+                    document.getElementById('recBanner').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
             } catch (err) {
                 errorMsg.textContent = err.message;
                 errorMsg.classList.add('active');
@@ -540,7 +714,7 @@
                 sentiment.summary.avg_sentiment > 0.05 ? 'positive' :
                 sentiment.summary.avg_sentiment < -0.05 ? 'negative' : 'neutral-color'
             );
-            document.getElementById('articleCount').textContent = `Based on ${sentiment.summary.total_articles} articles`;
+            document.getElementById('articleCount').textContent = `${sentiment.summary.total_articles} articles`;
 
             // Sentiment Bar
             const bar = document.getElementById('sentimentBar');
@@ -573,13 +747,9 @@
                 recommendation.combined_score < 0 ? 'negative' : 'neutral-color'
             );
 
-            // Price Chart
+            // Charts
             renderPriceChart(prices, ticker, benchmark.index_name);
-
-            // Sentiment Chart
             renderSentimentChart(sentiment.daily_sentiment);
-
-            // News List
             renderNews(sentiment.articles, ticker);
         }
 
@@ -587,34 +757,29 @@
             const ctx = document.getElementById('priceChart').getContext('2d');
             if (priceChart) priceChart.destroy();
 
-            if (prices.error) {
-                priceChart = null;
-                return;
-            }
+            if (prices.error) { priceChart = null; return; }
 
             priceChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: prices.dates,
+                    labels: prices.dates.map(d => d.slice(5)), // MM-DD format
                     datasets: [
                         {
                             label: ticker,
                             data: prices.stock_normalized,
                             borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59,130,246,0.1)',
                             tension: 0.3,
                             fill: false,
-                            pointRadius: 3,
+                            pointRadius: 2,
                             borderWidth: 2
                         },
                         {
                             label: benchName,
                             data: prices.bench_normalized,
                             borderColor: '#94a3b8',
-                            backgroundColor: 'rgba(148,163,184,0.1)',
                             tension: 0.3,
                             fill: false,
-                            pointRadius: 3,
+                            pointRadius: 2,
                             borderWidth: 2,
                             borderDash: [5, 5]
                         }
@@ -622,9 +787,13 @@
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: true,
                     interaction: { intersect: false, mode: 'index' },
                     plugins: {
-                        legend: { labels: { color: '#94a3b8' } },
+                        legend: {
+                            labels: { color: '#94a3b8', boxWidth: 20, font: { size: 11 } },
+                            position: 'top'
+                        },
                         tooltip: {
                             callbacks: {
                                 label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}`
@@ -633,12 +802,12 @@
                     },
                     scales: {
                         x: {
-                            ticks: { color: '#64748b', maxRotation: 45 },
-                            grid: { color: 'rgba(51,65,85,0.5)' }
+                            ticks: { color: '#64748b', maxRotation: 0, font: { size: 10 } },
+                            grid: { color: 'rgba(51,65,85,0.3)' }
                         },
                         y: {
-                            ticks: { color: '#64748b' },
-                            grid: { color: 'rgba(51,65,85,0.5)' }
+                            ticks: { color: '#64748b', font: { size: 10 } },
+                            grid: { color: 'rgba(51,65,85,0.3)' }
                         }
                     }
                 }
@@ -649,7 +818,7 @@
             const ctx = document.getElementById('sentimentChart').getContext('2d');
             if (sentimentChart) sentimentChart.destroy();
 
-            const dates = Object.keys(dailySentiment);
+            const dates = Object.keys(dailySentiment).map(d => d.slice(5));
             const scores = Object.values(dailySentiment);
             const colors = scores.map(s => s >= 0.05 ? '#22c55e' : s <= -0.05 ? '#ef4444' : '#fbbf24');
 
@@ -658,29 +827,27 @@
                 data: {
                     labels: dates,
                     datasets: [{
-                        label: 'Avg Sentiment',
+                        label: 'Sentiment',
                         data: scores,
                         backgroundColor: colors.map(c => c + '80'),
                         borderColor: colors,
                         borderWidth: 1,
-                        borderRadius: 4
+                        borderRadius: 3
                     }]
                 },
                 options: {
                     responsive: true,
-                    plugins: {
-                        legend: { display: false }
-                    },
+                    maintainAspectRatio: true,
+                    plugins: { legend: { display: false } },
                     scales: {
                         x: {
-                            ticks: { color: '#64748b', maxRotation: 45 },
-                            grid: { color: 'rgba(51,65,85,0.5)' }
+                            ticks: { color: '#64748b', maxRotation: 0, font: { size: 10 } },
+                            grid: { color: 'rgba(51,65,85,0.3)' }
                         },
                         y: {
-                            min: -1,
-                            max: 1,
-                            ticks: { color: '#64748b' },
-                            grid: { color: 'rgba(51,65,85,0.5)' }
+                            min: -1, max: 1,
+                            ticks: { color: '#64748b', font: { size: 10 } },
+                            grid: { color: 'rgba(51,65,85,0.3)' }
                         }
                     }
                 }
@@ -688,7 +855,7 @@
         }
 
         function renderNews(articles, ticker) {
-            document.getElementById('newsHeader').textContent = `Recent News for ${ticker} (${articles.length} articles)`;
+            document.getElementById('newsHeader').textContent = `News for ${ticker} (${articles.length})`;
             const list = document.getElementById('newsList');
             list.innerHTML = articles.map(a => {
                 const badgeClass = a.sentiment_label === 'Positive' ? 'badge-positive' :
